@@ -1,0 +1,21 @@
+# Go
+*.exe
+*.out
+*.test
+/bin/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+
+# AWS
+.aws/
+
+# Environment
+.env
+
+# macOS
+.DS_Store
