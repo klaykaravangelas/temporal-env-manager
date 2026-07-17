@@ -37,7 +37,7 @@ Worker
 - [Terraform](https://developer.hashicorp.com/terraform/install)
 - [Docker](https://www.docker.com/products/docker-desktop/) and Docker Compose
 - AWS account with credentials configured (`aws configure`)
-- An S3 bucket for Terraform state storage
+- An S3 bucket for Terraform state storage (create one via the AWS console or CLI: `aws s3 mb s3://your-bucket-name`)
 
 ## Setup
 

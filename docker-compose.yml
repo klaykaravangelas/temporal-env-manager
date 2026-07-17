@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   postgresql:
-    image: postgres:13
+    image: postgres:latest
     environment:
       POSTGRES_PASSWORD: temporal
       POSTGRES_USER: temporal
@@ -14,7 +12,7 @@ services:
       retries: 5
 
   temporal:
-    image: temporalio/auto-setup:1.24
+    image: temporalio/auto-setup:latest
     depends_on:
       postgresql:
         condition: service_healthy
@@ -28,7 +26,7 @@ services:
       - "7233:7233"
 
   temporal-ui:
-    image: temporalio/ui:2.26.2
+    image: temporalio/ui:latest
     depends_on:
       - temporal
     environment:
