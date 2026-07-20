@@ -1,16 +1,17 @@
-package activities
+package ec2activities
 
 import (
 	"context"
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 )
 
-func RunSetupCommands(ctx context.Context, instanceID string) error {
+func EC2RunSetupCommands(ctx context.Context, instanceID string) error {
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
 	if err != nil {
 		return fmt.Errorf("failed to load AWS config: %w", err)
@@ -18,10 +19,9 @@ func RunSetupCommands(ctx context.Context, instanceID string) error {
 
 	client := ssm.NewFromConfig(cfg)
 
-	// Send a placeholder command
 	sendOut, err := client.SendCommand(ctx, &ssm.SendCommandInput{
 		InstanceIds:  []string{instanceID},
-		DocumentName: stringPtr("AWS-RunShellScript"),
+		DocumentName: aws.String("AWS-RunShellScript"),
 		Parameters: map[string][]string{
 			"commands": {"echo 'Hello from Temporal! Environment setup complete.'"},
 		},
@@ -32,7 +32,6 @@ func RunSetupCommands(ctx context.Context, instanceID string) error {
 
 	commandID := *sendOut.Command.CommandId
 
-	// Poll until the command completes
 	for {
 		select {
 		case <-ctx.Done():
@@ -45,7 +44,6 @@ func RunSetupCommands(ctx context.Context, instanceID string) error {
 			InstanceId: &instanceID,
 		})
 		if err != nil {
-			// Invocation may not be available immediately
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -61,8 +59,4 @@ func RunSetupCommands(ctx context.Context, instanceID string) error {
 
 		time.Sleep(2 * time.Second)
 	}
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

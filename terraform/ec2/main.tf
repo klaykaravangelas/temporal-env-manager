@@ -1,30 +1,3 @@
-terraform {
-  backend "s3" {
-    bucket = "temporal-poc-state-bucket"
-    key    = "terraform.tfstate"
-    region = "us-east-1"
-  }
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 6.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.region
-}
-
-variable "region" {
-  default = "us-east-1"
-}
-
-variable "instance_type" {
-  default = "t2.micro"
-}
-
 # VPC
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -132,22 +105,13 @@ data "aws_ami" "amazon_linux" {
 
 # EC2 instance
 resource "aws_instance" "main" {
-  ami                  = data.aws_ami.amazon_linux.id
-  instance_type        = var.instance_type
-  subnet_id            = aws_subnet.public.id
-  iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = var.instance_type
+  subnet_id              = aws_subnet.public.id
+  iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
   vpc_security_group_ids = [aws_security_group.instance.id]
 
   tags = {
     Name = "temporal-poc-instance"
   }
-}
-
-# Outputs for use in Go activities
-output "instance_id" {
-  value = aws_instance.main.id
-}
-
-output "vpc_id" {
-  value = aws_vpc.main.id
 }

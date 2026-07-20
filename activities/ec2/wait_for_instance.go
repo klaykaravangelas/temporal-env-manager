@@ -1,4 +1,4 @@
-package activities
+package ec2activities
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
-func WaitForInstance(ctx context.Context, instanceID string) error {
+func EC2WaitForInstance(ctx context.Context, instanceID string) error {
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
 	if err != nil {
 		return fmt.Errorf("failed to load AWS config: %w", err)

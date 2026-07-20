@@ -1,4 +1,4 @@
-package activities
+package s3lambdaactivities
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"os/exec"
 )
 
-func TerraformDestroy(ctx context.Context) error {
+func S3LambdaTerraformDestroy(ctx context.Context) error {
 	dir := getTerraformDir()
 
 	destroy := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve")

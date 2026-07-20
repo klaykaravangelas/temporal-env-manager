@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	envworkflow "github.com/klaykaravangelas/temporal-env-manager/workflow"
+	"github.com/klaykaravangelas/temporal-env-manager/workflows/router"
 
 	"go.temporal.io/sdk/client"
 )
@@ -33,24 +33,47 @@ func main() {
 }
 
 func createEnvironment(w http.ResponseWriter, r *http.Request) {
-	cfg := envworkflow.EnvironmentConfig{
-		TTL: 5 * time.Minute,
+	var body struct {
+		Type    string `json:"type"`
+		TTLMins *int   `json:"ttlMinutes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Type == "" {
+		http.Error(w, `invalid body, expected {"type": "ec2", "ttlMinutes": 10}`, http.StatusBadRequest)
+		return
 	}
 
+	var ttl *time.Duration
+	if body.TTLMins != nil {
+		d := time.Duration(*body.TTLMins) * time.Minute
+		ttl = &d
+	}
+
+	req := router.EnvironmentRequest{
+		Type: body.Type,
+		TTL:  ttl,
+	}
+
+	routerID := fmt.Sprintf("router-%d", time.Now().UnixMilli())
 	options := client.StartWorkflowOptions{
-		ID:        fmt.Sprintf("env-%d", time.Now().UnixMilli()),
+		ID:        routerID,
 		TaskQueue: "environment-task-queue",
 	}
 
-	we, err := temporalClient.ExecuteWorkflow(context.Background(), options, envworkflow.EnvironmentWorkflow, cfg)
+	we, err := temporalClient.ExecuteWorkflow(context.Background(), options, router.RouterWorkflow, req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Wait for the router to return the child workflow ID
+	var childID string
+	if err := we.Get(context.Background(), &childID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	json.NewEncoder(w).Encode(map[string]string{
-		"workflowId": we.GetID(),
-		"runId":      we.GetRunID(),
+		"workflowId": childID,
 	})
 }
 
@@ -94,7 +117,7 @@ func extendEnvironment(w http.ResponseWriter, r *http.Request) {
 		Minutes int `json:"minutes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body, expected {\"minutes\": N}", http.StatusBadRequest)
+		http.Error(w, `invalid body, expected {"minutes": N}`, http.StatusBadRequest)
 		return
 	}
 

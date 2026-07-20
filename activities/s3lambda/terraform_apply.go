@@ -1,4 +1,4 @@
-package activities
+package s3lambdaactivities
 
 import (
 	"context"
@@ -9,41 +9,35 @@ import (
 	"runtime"
 )
 
-// getTerraformDir returns the absolute path to the terraform/ directory.
 func getTerraformDir() string {
 	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(filename), "..", "terraform")
+	return filepath.Join(filepath.Dir(filename), "..", "..", "terraform", "s3lambda")
 }
 
-// TerraformOutput represents a single terraform output value.
 type TerraformOutput struct {
 	Value string `json:"value"`
 }
 
-// TerraformApplyResult holds the outputs we care about.
 type TerraformApplyResult struct {
-	InstanceID string
-	VpcID      string
+	BucketName string
+	LambdaArn  string
 }
 
-func TerraformApply(ctx context.Context) (*TerraformApplyResult, error) {
+func S3LambdaTerraformApply(ctx context.Context) (*TerraformApplyResult, error) {
 	dir := getTerraformDir()
 
-	// terraform init
 	init := exec.CommandContext(ctx, "terraform", "init")
 	init.Dir = dir
 	if out, err := init.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("terraform init failed: %s\n%s", err, out)
 	}
 
-	// terraform apply
 	apply := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve")
 	apply.Dir = dir
 	if out, err := apply.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("terraform apply failed: %s\n%s", err, out)
 	}
 
-	// terraform output -json
 	output := exec.CommandContext(ctx, "terraform", "output", "-json")
 	output.Dir = dir
 	out, err := output.Output()
@@ -57,7 +51,7 @@ func TerraformApply(ctx context.Context) (*TerraformApplyResult, error) {
 	}
 
 	return &TerraformApplyResult{
-		InstanceID: outputs["instance_id"].Value,
-		VpcID:      outputs["vpc_id"].Value,
+		BucketName: outputs["bucket_name"].Value,
+		LambdaArn:  outputs["lambda_arn"].Value,
 	}, nil
 }
