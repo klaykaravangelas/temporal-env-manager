@@ -1,6 +1,6 @@
 # Temporal Environment Manager
 
-A Go project that uses [Temporal](https://temporal.io) to orchestrate the lifecycle of temporary AWS environments. Provision infrastructure via Terraform, keep it alive for a configurable TTL, and automatically tear it down — all through a simple HTTP API.
+A Go project that uses [Temporal](https://temporal.io) to orchestrate the lifecycle of temporary AWS environments. Provision infrastructure via Terraform, keep it alive for a configurable TTL, and automatically tear it down — all through a simple HTTP API and a React UI.
 
 ## What it does
 
@@ -14,8 +14,11 @@ A Go project that uses [Temporal](https://temporal.io) to orchestrate the lifecy
 ## Architecture
 
 ```
-HTTP Client
+Browser (localhost:5173)
     │
+    ▼
+React UI (Vite dev server)
+    │  GET/POST/DELETE /environments
     ▼
 API Server (localhost:8090)
     │  StartWorkflow / SignalWorkflow / QueryWorkflow
@@ -47,6 +50,7 @@ Every request goes through a `RouterWorkflow` which starts the appropriate child
 ## Prerequisites
 
 - [Go 1.22+](https://go.dev/dl/)
+- [Node.js 18+](https://nodejs.org/) (for the UI)
 - [Terraform](https://developer.hashicorp.com/terraform/install)
 - [Docker](https://www.docker.com/products/docker-desktop/) and Docker Compose
 - AWS account with credentials configured
@@ -98,19 +102,66 @@ This starts:
 go mod download
 ```
 
-### 6. Start the worker (Terminal 1)
+### 6. Install UI dependencies
 
 ```bash
+cd ui && npm install && cd ..
+```
+
+### 7. Start everything
+
+The easiest way is to use the startup script, which exports credentials, ensures Temporal is running, and opens the worker, API, and UI in separate terminal tabs:
+
+```bash
+./scripts/start.sh
+```
+
+Or start each process manually:
+
+```bash
+# Terminal 1
 go run worker/main.go
+
+# Terminal 2
+go run api/main.go
+
+# Terminal 3
+cd ui && npm run dev
 ```
 
-### 7. Start the API server (Terminal 2)
+| Service | URL |
+|---|---|
+| UI | http://localhost:5173 |
+| API | http://127.0.0.1:8090 |
+| Temporal UI | http://localhost:8080 |
+
+### Stopping
 
 ```bash
-go run api/main.go
+./scripts/stop.sh
 ```
 
-The API runs on `http://127.0.0.1:8090`.
+This kills the worker, API, and UI processes — including the compiled child binaries that `go run` spawns. Without this, restarting the worker with `go run` leaves stale processes running in the background.
+
+To also stop the Temporal Docker containers:
+
+```bash
+./scripts/stop.sh --temporal
+```
+
+> **Note:** `go run` compiles your code into a temporary binary and runs it as a child process. Closing the terminal or killing the `go run` parent does **not** kill the child. Always use `stop.sh` to ensure a clean shutdown.
+
+## UI
+
+Open `http://localhost:5173` in your browser. The UI lets you:
+
+- Create EC2 or S3Lambda environments with a type selector and optional TTL
+- Pass optional Terraform variable overrides per environment type (region, instance type, bucket name, etc.)
+- View all running environments with their current step and a labeled output grid (Instance ID, VPC ID, Bucket Name, Lambda Function, Lambda ARN, Started At)
+- Extend the TTL of a running environment
+- Destroy an environment — the Destroy button is disabled until provisioning completes
+
+The environment list polls every 5 seconds automatically.
 
 ## API Usage
 
@@ -136,6 +187,22 @@ curl -X POST http://127.0.0.1:8090/environments \
   -d '{"type": "s3lambda"}'
 ```
 
+Pass optional `vars` to override Terraform variable defaults:
+
+```bash
+# EC2 — override region and instance type
+curl -X POST http://127.0.0.1:8090/environments \
+  -H "Content-Type: application/json" \
+  -d '{"type": "ec2", "ttlMinutes": 30, "vars": {"region": "us-west-2", "instanceType": "t3.small"}}'
+
+# S3Lambda — override bucket and function name
+curl -X POST http://127.0.0.1:8090/environments \
+  -H "Content-Type: application/json" \
+  -d '{"type": "s3lambda", "vars": {"bucketName": "my-bucket", "lambdaFunctionName": "my-handler"}}'
+```
+
+Any omitted `vars` keys fall back to the defaults defined in `terraform/*/variables.tf`.
+
 Response:
 ```json
 {"workflowId": "s3lambda-1719432000000"}
@@ -149,12 +216,12 @@ curl http://127.0.0.1:8090/environments/s3lambda-1719432000000
 
 EC2 response:
 ```json
-{"step": "sleeping", "instanceId": "i-abc123"}
+{"step": "sleeping", "instanceId": "i-abc123", "vpcId": "vpc-0abc123"}
 ```
 
 S3Lambda response:
 ```json
-{"step": "sleeping", "bucketName": "temporal-poc-s3lambda-bucket"}
+{"step": "sleeping", "bucketName": "my-bucket", "lambdaFunctionName": "my-handler", "lambdaArn": "arn:aws:lambda:us-east-1:123456789:function:my-handler"}
 ```
 
 Possible steps: `initializing`, `applying`, `waiting-for-instance` (EC2 only), `running-setup` (EC2 only), `sleeping`, `destroying`, `completed`
@@ -181,10 +248,25 @@ No Temporal server or AWS credentials needed — tests run entirely in memory.
 go test ./... -v
 ```
 
+## CI
+
+A GitHub Actions workflow runs on every push and pull request to `main`. It has two parallel jobs:
+
+- **build-and-test**: compiles all Go packages and runs the full test suite
+- **ui-build**: installs UI dependencies and runs `vite build`
+
+No AWS credentials or Temporal server are needed — Go tests use the Temporal test SDK in-memory, and the UI build is purely static.
+
 ## Project Structure
 
 ```
 temporal-env-manager/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                   # Build + test on push/PR to main
+├── scripts/
+│   ├── start.sh                     # Exports credentials, starts Temporal, opens worker/API/UI
+│   └── stop.sh                      # Kills worker, API, UI processes (and optionally Temporal)
 ├── activities/
 │   ├── ec2/
 │   │   ├── terraform_apply.go       # Runs terraform init + apply, returns instance ID and VPC ID
@@ -192,7 +274,7 @@ temporal-env-manager/
 │   │   ├── run_setup_commands.go    # Runs SSM commands on the instance
 │   │   └── terraform_destroy.go     # Runs terraform destroy
 │   └── s3lambda/
-│       ├── terraform_apply.go       # Runs terraform init + apply, returns bucket name and Lambda ARN
+│       ├── terraform_apply.go       # Runs terraform init + apply, returns bucket name, Lambda function name, and ARN
 │       └── terraform_destroy.go     # Runs terraform destroy
 ├── workflows/
 │   ├── router/
@@ -206,7 +288,14 @@ temporal-env-manager/
 ├── worker/
 │   └── main.go                      # Registers all workflows and activities, runs the worker
 ├── api/
-│   └── main.go                      # HTTP API server
+│   └── main.go                      # HTTP API server with CORS middleware
+├── ui/
+│   ├── src/
+│   │   ├── App.jsx                  # React UI: environment list, create form, extend/destroy actions
+│   │   └── index.css                # Tailwind CSS import
+│   ├── index.html
+│   ├── vite.config.js               # Vite + Tailwind plugin
+│   └── package.json
 ├── terraform/
 │   ├── ec2/
 │   │   ├── providers.tf             # S3 backend, AWS provider
@@ -221,5 +310,6 @@ temporal-env-manager/
 │       └── lambda/
 │           └── handler.py           # Python 3.13 Lambda that logs S3 event details
 ├── docker-compose.yml               # Temporal server + UI
-└── go.mod
+├── go.mod
+└── README.md
 ```

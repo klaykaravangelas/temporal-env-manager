@@ -10,17 +10,22 @@ import (
 )
 
 type EnvironmentConfig struct {
-	TTL *time.Duration
+	TTL  *time.Duration
+	Vars s3lambdaactivities.TerraformVars
 }
 
 func S3LambdaEnvironmentWorkflow(ctx workflow.Context, cfg EnvironmentConfig) error {
 	currentStep := "initializing"
 	bucketName := ""
+	lambdaFunctionName := ""
+	lambdaArn := ""
 
 	err := workflow.SetQueryHandler(ctx, "status", func() (map[string]string, error) {
 		return map[string]string{
-			"step":       currentStep,
-			"bucketName": bucketName,
+			"step":               currentStep,
+			"bucketName":         bucketName,
+			"lambdaFunctionName": lambdaFunctionName,
+			"lambdaArn":          lambdaArn,
 		}, nil
 	})
 	if err != nil {
@@ -41,11 +46,13 @@ func S3LambdaEnvironmentWorkflow(ctx workflow.Context, cfg EnvironmentConfig) er
 	// Step 1: Terraform Apply
 	currentStep = "applying"
 	var applyResult s3lambdaactivities.TerraformApplyResult
-	err = workflow.ExecuteActivity(terraformCtx, s3lambdaactivities.S3LambdaTerraformApply).Get(ctx, &applyResult)
+	err = workflow.ExecuteActivity(terraformCtx, s3lambdaactivities.S3LambdaTerraformApply, cfg.Vars).Get(ctx, &applyResult)
 	if err != nil {
 		return err
 	}
 	bucketName = applyResult.BucketName
+	lambdaFunctionName = applyResult.LambdaFunctionName
+	lambdaArn = applyResult.LambdaArn
 
 	// Step 2: Sleep for TTL or wait for teardown signal
 	currentStep = "sleeping"
@@ -87,7 +94,7 @@ func S3LambdaEnvironmentWorkflow(ctx workflow.Context, cfg EnvironmentConfig) er
 	currentStep = "destroying"
 	cleanupCtx, _ := workflow.NewDisconnectedContext(ctx)
 	cleanupCtx = workflow.WithActivityOptions(cleanupCtx, terraformOpts)
-	err = workflow.ExecuteActivity(cleanupCtx, s3lambdaactivities.S3LambdaTerraformDestroy).Get(cleanupCtx, nil)
+	err = workflow.ExecuteActivity(cleanupCtx, s3lambdaactivities.S3LambdaTerraformDestroy, cfg.Vars).Get(cleanupCtx, nil)
 	if err != nil {
 		return err
 	}

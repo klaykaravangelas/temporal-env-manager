@@ -10,17 +10,20 @@ import (
 )
 
 type EnvironmentConfig struct {
-	TTL *time.Duration
+	TTL  *time.Duration
+	Vars ec2activities.TerraformVars
 }
 
 func EC2EnvironmentWorkflow(ctx workflow.Context, cfg EnvironmentConfig) error {
 	currentStep := "initializing"
 	instanceID := ""
+	vpcID := ""
 
 	err := workflow.SetQueryHandler(ctx, "status", func() (map[string]string, error) {
 		return map[string]string{
 			"step":       currentStep,
 			"instanceId": instanceID,
+			"vpcId":      vpcID,
 		}, nil
 	})
 	if err != nil {
@@ -55,18 +58,19 @@ func EC2EnvironmentWorkflow(ctx workflow.Context, cfg EnvironmentConfig) error {
 	currentStep = "applying"
 	terraformCtx := workflow.WithActivityOptions(ctx, terraformOpts)
 	var applyResult ec2activities.TerraformApplyResult
-	err = workflow.ExecuteActivity(terraformCtx, ec2activities.EC2TerraformApply).Get(ctx, &applyResult)
+	err = workflow.ExecuteActivity(terraformCtx, ec2activities.EC2TerraformApply, cfg.Vars).Get(ctx, &applyResult)
 	if err != nil {
 		return err
 	}
 	instanceID = applyResult.InstanceID
+	vpcID = applyResult.VpcID
 
 	// Step 2: Wait for instance to be healthy
 	currentStep = "waiting-for-instance"
 	waitCtx := workflow.WithActivityOptions(ctx, waitOpts)
 	err = workflow.ExecuteActivity(waitCtx, ec2activities.EC2WaitForInstance, applyResult.InstanceID).Get(ctx, nil)
 	if err != nil {
-		_ = workflow.ExecuteActivity(terraformCtx, ec2activities.EC2TerraformDestroy).Get(ctx, nil)
+		_ = workflow.ExecuteActivity(terraformCtx, ec2activities.EC2TerraformDestroy, cfg.Vars).Get(ctx, nil)
 		return err
 	}
 
@@ -75,7 +79,7 @@ func EC2EnvironmentWorkflow(ctx workflow.Context, cfg EnvironmentConfig) error {
 	ssmCtx := workflow.WithActivityOptions(ctx, ssmOpts)
 	err = workflow.ExecuteActivity(ssmCtx, ec2activities.EC2RunSetupCommands, applyResult.InstanceID).Get(ctx, nil)
 	if err != nil {
-		_ = workflow.ExecuteActivity(terraformCtx, ec2activities.EC2TerraformDestroy).Get(ctx, nil)
+		_ = workflow.ExecuteActivity(terraformCtx, ec2activities.EC2TerraformDestroy, cfg.Vars).Get(ctx, nil)
 		return err
 	}
 
@@ -119,7 +123,7 @@ func EC2EnvironmentWorkflow(ctx workflow.Context, cfg EnvironmentConfig) error {
 	currentStep = "destroying"
 	cleanupCtx, _ := workflow.NewDisconnectedContext(ctx)
 	cleanupCtx = workflow.WithActivityOptions(cleanupCtx, terraformOpts)
-	err = workflow.ExecuteActivity(cleanupCtx, ec2activities.EC2TerraformDestroy).Get(cleanupCtx, nil)
+	err = workflow.ExecuteActivity(cleanupCtx, ec2activities.EC2TerraformDestroy, cfg.Vars).Get(cleanupCtx, nil)
 	if err != nil {
 		return err
 	}

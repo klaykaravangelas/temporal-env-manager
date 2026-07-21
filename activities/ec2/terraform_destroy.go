@@ -6,10 +6,17 @@ import (
 	"os/exec"
 )
 
-func EC2TerraformDestroy(ctx context.Context) error {
+func EC2TerraformDestroy(ctx context.Context, vars TerraformVars) error {
 	dir := getTerraformDir()
 
-	destroy := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve")
+	args := []string{"destroy", "-auto-approve"}
+	if vars.Region != "" {
+		args = append(args, "-var", "region="+vars.Region)
+	}
+	if vars.InstanceType != "" {
+		args = append(args, "-var", "instance_type="+vars.InstanceType)
+	}
+	destroy := exec.CommandContext(ctx, "terraform", args...)
 	destroy.Dir = dir
 	if out, err := destroy.CombinedOutput(); err != nil {
 		return fmt.Errorf("terraform destroy failed: %s\n%s", err, out)

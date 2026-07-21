@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	ec2activities "github.com/klaykaravangelas/temporal-env-manager/activities/ec2"
+	s3lambdaactivities "github.com/klaykaravangelas/temporal-env-manager/activities/s3lambda"
 	ec2workflow "github.com/klaykaravangelas/temporal-env-manager/workflows/ec2"
 	s3lambdaworkflow "github.com/klaykaravangelas/temporal-env-manager/workflows/s3lambda"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -13,7 +15,8 @@ import (
 
 type EnvironmentRequest struct {
 	Type string
-	TTL  *time.Duration // nil means no TTL
+	TTL  *time.Duration
+	Vars map[string]string // optional terraform variable overrides
 }
 
 func RouterWorkflow(ctx workflow.Context, req EnvironmentRequest) (string, error) {
@@ -27,13 +30,26 @@ func RouterWorkflow(ctx workflow.Context, req EnvironmentRequest) (string, error
 
 	switch req.Type {
 	case "ec2":
-		cfg := ec2workflow.EnvironmentConfig{TTL: req.TTL}
+		cfg := ec2workflow.EnvironmentConfig{
+			TTL: req.TTL,
+			Vars: ec2activities.TerraformVars{
+				Region:       req.Vars["region"],
+				InstanceType: req.Vars["instanceType"],
+			},
+		}
 		err := workflow.ExecuteChildWorkflow(childCtx, ec2workflow.EC2EnvironmentWorkflow, cfg).GetChildWorkflowExecution().Get(ctx, nil)
 		if err != nil {
 			return "", fmt.Errorf("failed to start ec2 workflow: %w", err)
 		}
 	case "s3lambda":
-		cfg := s3lambdaworkflow.EnvironmentConfig{TTL: req.TTL}
+		cfg := s3lambdaworkflow.EnvironmentConfig{
+			TTL: req.TTL,
+			Vars: s3lambdaactivities.TerraformVars{
+				Region:             req.Vars["region"],
+				BucketName:         req.Vars["bucketName"],
+				LambdaFunctionName: req.Vars["lambdaFunctionName"],
+			},
+		}
 		err := workflow.ExecuteChildWorkflow(childCtx, s3lambdaworkflow.S3LambdaEnvironmentWorkflow, cfg).GetChildWorkflowExecution().Get(ctx, nil)
 		if err != nil {
 			return "", fmt.Errorf("failed to start s3lambda workflow: %w", err)

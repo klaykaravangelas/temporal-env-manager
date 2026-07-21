@@ -18,12 +18,19 @@ type TerraformOutput struct {
 	Value string `json:"value"`
 }
 
-type TerraformApplyResult struct {
-	BucketName string
-	LambdaArn  string
+type TerraformVars struct {
+	Region             string
+	BucketName         string
+	LambdaFunctionName string
 }
 
-func S3LambdaTerraformApply(ctx context.Context) (*TerraformApplyResult, error) {
+type TerraformApplyResult struct {
+	BucketName         string
+	LambdaFunctionName string
+	LambdaArn          string
+}
+
+func S3LambdaTerraformApply(ctx context.Context, vars TerraformVars) (*TerraformApplyResult, error) {
 	dir := getTerraformDir()
 
 	init := exec.CommandContext(ctx, "terraform", "init")
@@ -32,7 +39,17 @@ func S3LambdaTerraformApply(ctx context.Context) (*TerraformApplyResult, error) 
 		return nil, fmt.Errorf("terraform init failed: %s\n%s", err, out)
 	}
 
-	apply := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve")
+	args := []string{"apply", "-auto-approve"}
+	if vars.Region != "" {
+		args = append(args, "-var", "region="+vars.Region)
+	}
+	if vars.BucketName != "" {
+		args = append(args, "-var", "bucket_name="+vars.BucketName)
+	}
+	if vars.LambdaFunctionName != "" {
+		args = append(args, "-var", "lambda_function_name="+vars.LambdaFunctionName)
+	}
+	apply := exec.CommandContext(ctx, "terraform", args...)
 	apply.Dir = dir
 	if out, err := apply.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("terraform apply failed: %s\n%s", err, out)
@@ -51,7 +68,8 @@ func S3LambdaTerraformApply(ctx context.Context) (*TerraformApplyResult, error) 
 	}
 
 	return &TerraformApplyResult{
-		BucketName: outputs["bucket_name"].Value,
-		LambdaArn:  outputs["lambda_arn"].Value,
+		BucketName:         outputs["bucket_name"].Value,
+		LambdaFunctionName: outputs["lambda_function_name"].Value,
+		LambdaArn:          outputs["lambda_arn"].Value,
 	}, nil
 }

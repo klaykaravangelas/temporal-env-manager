@@ -18,12 +18,17 @@ type TerraformOutput struct {
 	Value string `json:"value"`
 }
 
+type TerraformVars struct {
+	Region       string
+	InstanceType string
+}
+
 type TerraformApplyResult struct {
 	InstanceID string
 	VpcID      string
 }
 
-func EC2TerraformApply(ctx context.Context) (*TerraformApplyResult, error) {
+func EC2TerraformApply(ctx context.Context, vars TerraformVars) (*TerraformApplyResult, error) {
 	dir := getTerraformDir()
 
 	init := exec.CommandContext(ctx, "terraform", "init")
@@ -32,7 +37,14 @@ func EC2TerraformApply(ctx context.Context) (*TerraformApplyResult, error) {
 		return nil, fmt.Errorf("terraform init failed: %s\n%s", err, out)
 	}
 
-	apply := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve")
+	args := []string{"apply", "-auto-approve"}
+	if vars.Region != "" {
+		args = append(args, "-var", "region="+vars.Region)
+	}
+	if vars.InstanceType != "" {
+		args = append(args, "-var", "instance_type="+vars.InstanceType)
+	}
+	apply := exec.CommandContext(ctx, "terraform", args...)
 	apply.Dir = dir
 	if out, err := apply.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("terraform apply failed: %s\n%s", err, out)
