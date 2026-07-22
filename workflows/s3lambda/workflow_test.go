@@ -28,10 +28,10 @@ func ttlPtr(d time.Duration) *time.Duration {
 func (s *WorkflowTestSuite) Test_HappyPath() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything).Return(
+	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything, s3lambdaactivities.TerraformVars{}).Return(
 		&s3lambdaactivities.TerraformApplyResult{BucketName: "my-bucket", LambdaArn: "arn:aws:lambda:us-east-1:123:function:my-fn"}, nil,
 	)
-	env.OnActivity(s3lambdaactivities.S3LambdaTerraformDestroy, mock.Anything).Return(nil)
+	env.OnActivity(s3lambdaactivities.S3LambdaTerraformDestroy, mock.Anything, s3lambdaactivities.TerraformVars{}).Return(nil)
 
 	env.ExecuteWorkflow(S3LambdaEnvironmentWorkflow, EnvironmentConfig{TTL: ttlPtr(5 * time.Minute)})
 
@@ -43,7 +43,7 @@ func (s *WorkflowTestSuite) Test_HappyPath() {
 func (s *WorkflowTestSuite) Test_Compensation_OnApplyFailure() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything).Return(
+	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything, s3lambdaactivities.TerraformVars{}).Return(
 		nil, fmt.Errorf("apply failed"),
 	)
 
@@ -57,10 +57,10 @@ func (s *WorkflowTestSuite) Test_Compensation_OnApplyFailure() {
 func (s *WorkflowTestSuite) Test_ExtendSignal() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything).Return(
+	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything, s3lambdaactivities.TerraformVars{}).Return(
 		&s3lambdaactivities.TerraformApplyResult{BucketName: "my-bucket", LambdaArn: "arn:aws:lambda:us-east-1:123:function:my-fn"}, nil,
 	)
-	env.OnActivity(s3lambdaactivities.S3LambdaTerraformDestroy, mock.Anything).Return(nil)
+	env.OnActivity(s3lambdaactivities.S3LambdaTerraformDestroy, mock.Anything, s3lambdaactivities.TerraformVars{}).Return(nil)
 
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow("extend-ttl", 10*time.Minute)
@@ -76,10 +76,10 @@ func (s *WorkflowTestSuite) Test_ExtendSignal() {
 func (s *WorkflowTestSuite) Test_TeardownSignal() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything).Return(
+	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything, s3lambdaactivities.TerraformVars{}).Return(
 		&s3lambdaactivities.TerraformApplyResult{BucketName: "my-bucket", LambdaArn: "arn:aws:lambda:us-east-1:123:function:my-fn"}, nil,
 	)
-	env.OnActivity(s3lambdaactivities.S3LambdaTerraformDestroy, mock.Anything).Return(nil)
+	env.OnActivity(s3lambdaactivities.S3LambdaTerraformDestroy, mock.Anything, s3lambdaactivities.TerraformVars{}).Return(nil)
 
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow("teardown", nil)
@@ -95,10 +95,10 @@ func (s *WorkflowTestSuite) Test_TeardownSignal() {
 func (s *WorkflowTestSuite) Test_NoTTL_WaitsForTeardownSignal() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything).Return(
+	env.OnActivity(s3lambdaactivities.S3LambdaTerraformApply, mock.Anything, s3lambdaactivities.TerraformVars{}).Return(
 		&s3lambdaactivities.TerraformApplyResult{BucketName: "my-bucket", LambdaArn: "arn:aws:lambda:us-east-1:123:function:my-fn"}, nil,
 	)
-	env.OnActivity(s3lambdaactivities.S3LambdaTerraformDestroy, mock.Anything).Return(nil)
+	env.OnActivity(s3lambdaactivities.S3LambdaTerraformDestroy, mock.Anything, s3lambdaactivities.TerraformVars{}).Return(nil)
 
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow("teardown", nil)

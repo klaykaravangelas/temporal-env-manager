@@ -28,12 +28,12 @@ func ttlPtr(d time.Duration) *time.Duration {
 func (s *WorkflowTestSuite) Test_HappyPath() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything).Return(
+	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything, ec2activities.TerraformVars{}).Return(
 		&ec2activities.TerraformApplyResult{InstanceID: "i-abc123", VpcID: "vpc-xyz"}, nil,
 	)
 	env.OnActivity(ec2activities.EC2WaitForInstance, mock.Anything, "i-abc123").Return(nil)
 	env.OnActivity(ec2activities.EC2RunSetupCommands, mock.Anything, "i-abc123").Return(nil)
-	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything).Return(nil)
+	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything, ec2activities.TerraformVars{}).Return(nil)
 
 	env.ExecuteWorkflow(EC2EnvironmentWorkflow, EnvironmentConfig{TTL: ttlPtr(5 * time.Minute)})
 
@@ -45,13 +45,13 @@ func (s *WorkflowTestSuite) Test_HappyPath() {
 func (s *WorkflowTestSuite) Test_Compensation_OnWaitForInstanceFailure() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything).Return(
+	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything, ec2activities.TerraformVars{}).Return(
 		&ec2activities.TerraformApplyResult{InstanceID: "i-abc123", VpcID: "vpc-xyz"}, nil,
 	)
 	env.OnActivity(ec2activities.EC2WaitForInstance, mock.Anything, "i-abc123").Return(
 		fmt.Errorf("instance never became healthy"),
 	)
-	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything).Return(nil)
+	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything, ec2activities.TerraformVars{}).Return(nil)
 
 	env.ExecuteWorkflow(EC2EnvironmentWorkflow, EnvironmentConfig{TTL: ttlPtr(5 * time.Minute)})
 
@@ -63,12 +63,12 @@ func (s *WorkflowTestSuite) Test_Compensation_OnWaitForInstanceFailure() {
 func (s *WorkflowTestSuite) Test_ExtendSignal() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything).Return(
+	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything, ec2activities.TerraformVars{}).Return(
 		&ec2activities.TerraformApplyResult{InstanceID: "i-abc123", VpcID: "vpc-xyz"}, nil,
 	)
 	env.OnActivity(ec2activities.EC2WaitForInstance, mock.Anything, "i-abc123").Return(nil)
 	env.OnActivity(ec2activities.EC2RunSetupCommands, mock.Anything, "i-abc123").Return(nil)
-	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything).Return(nil)
+	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything, ec2activities.TerraformVars{}).Return(nil)
 
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow("extend-ttl", 10*time.Minute)
@@ -84,12 +84,12 @@ func (s *WorkflowTestSuite) Test_ExtendSignal() {
 func (s *WorkflowTestSuite) Test_TeardownSignal() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything).Return(
+	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything, ec2activities.TerraformVars{}).Return(
 		&ec2activities.TerraformApplyResult{InstanceID: "i-abc123", VpcID: "vpc-xyz"}, nil,
 	)
 	env.OnActivity(ec2activities.EC2WaitForInstance, mock.Anything, "i-abc123").Return(nil)
 	env.OnActivity(ec2activities.EC2RunSetupCommands, mock.Anything, "i-abc123").Return(nil)
-	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything).Return(nil)
+	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything, ec2activities.TerraformVars{}).Return(nil)
 
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow("teardown", nil)
@@ -105,12 +105,12 @@ func (s *WorkflowTestSuite) Test_TeardownSignal() {
 func (s *WorkflowTestSuite) Test_NoTTL_WaitsForTeardownSignal() {
 	env := s.NewTestWorkflowEnvironment()
 
-	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything).Return(
+	env.OnActivity(ec2activities.EC2TerraformApply, mock.Anything, ec2activities.TerraformVars{}).Return(
 		&ec2activities.TerraformApplyResult{InstanceID: "i-abc123", VpcID: "vpc-xyz"}, nil,
 	)
 	env.OnActivity(ec2activities.EC2WaitForInstance, mock.Anything, "i-abc123").Return(nil)
 	env.OnActivity(ec2activities.EC2RunSetupCommands, mock.Anything, "i-abc123").Return(nil)
-	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything).Return(nil)
+	env.OnActivity(ec2activities.EC2TerraformDestroy, mock.Anything, ec2activities.TerraformVars{}).Return(nil)
 
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow("teardown", nil)
